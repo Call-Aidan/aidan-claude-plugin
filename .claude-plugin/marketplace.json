@@ -1,0 +1,18 @@
+{
+  "name": "aidan",
+  "owner": {
+    "name": "Aidan",
+    "email": "support@callaidan.com"
+  },
+  "description": "Aidan plugins for Claude Code.",
+  "plugins": [
+    {
+      "name": "aidan-cli",
+      "source": "./aidan-cli",
+      "description": "Manage Aidan agents, workflows, contacts, conversations, and analytics directly from Claude Code.",
+      "version": "0.1.0",
+      "category": "productivity",
+      "keywords": ["aidan", "ai-agents", "workflow", "voice-ai", "crm"]
+    }
+  ]
+}
