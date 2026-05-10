@@ -5,6 +5,44 @@ description: Sign in to Aidan with your email and password
 You're guiding the user through a one-time login so the Aidan MCP
 connection works.
 
+### Step 0 — reuse existing session if possible (idempotency check)
+
+**Before asking for any credentials**, check whether a usable session
+already exists on disk. Minting a new token unnecessarily will invalidate
+the one the running MCP bridge currently holds and put the user into a
+re-auth loop.
+
+1. Read `~/.aidan/credentials.json`. If it doesn't exist, skip to Step 1.
+2. Parse the JSON. Pull `token` and `expires_at`.
+3. If `expires_at` is in the future, validate the token by calling:
+   ```
+   POST https://api.callaidan.com/mcp
+   Authorization: Bearer <token>
+   Content-Type: application/json
+   Accept: application/json, text/event-stream
+
+   {"jsonrpc":"2.0","id":"check","method":"initialize","params":{
+     "protocolVersion":"2024-11-05",
+     "capabilities":{},
+     "clientInfo":{"name":"aidan-cli-signin-check","version":"1"}
+   }}
+   ```
+   A `200` response with a JSON-RPC `result` (no `error` block) means the
+   token is valid.
+4. If valid, **stop and report success without minting anything**:
+   > You're already signed in as `<email>` (token in
+   > `~/.aidan/credentials.json` is valid). No new session needed.
+   >
+   > If you wanted to force a fresh sign-in (e.g. to switch accounts),
+   > run `/aidan-sign-out` first, then `/aidan-sign-in` again.
+   Then exit. Do NOT proceed to Step 1.
+5. Only if the file is missing, the token is expired, or the validation
+   call returns an explicit auth error, continue to Step 1.
+
+If the validation call fails for a non-auth reason (network, 5xx, HTML
+error page), do NOT proceed to mint a new token — the new one won't fix
+a transport problem. Surface the raw error and stop.
+
 ### Step 1 — collect credentials
 
 Ask the user (in two separate messages):

@@ -18,31 +18,51 @@ Open with one short message:
 
 ### Step 1 — check sign-in status
 
-Try `mcp__aidan__show_client`. Three cases:
+Try `mcp__aidan__show_client`. Inspect the response carefully — there are
+**four** distinct outcomes and only ONE of them should trigger sign-in.
+Misclassifying a transport failure as a 401 is what causes the dreaded
+re-auth loop, so be strict:
 
-**A. Returns 401 / missing auth** — they haven't signed in yet.
-Tell them:
+**A. Explicit auth failure** — the response body contains an error code
+of `MISSING_AUTH`, `INVALID_TOKEN`, `EXPIRED_TOKEN`, or an HTTP 401 with
+a JSON body that names auth as the cause. Only in this case:
 > First, let's sign you in. I'll ask for your email and password — they go
 > directly to Aidan to issue you a session token.
 
-Then run the same flow as `/aidan-sign-in` (collect email and password,
-POST to `https://api.callaidan.com/auth/plugin/login/`, save token
-to shell rc, redact in confirmation).
+Then run the same flow as `/aidan-sign-in` (which is itself idempotent —
+it will reuse a valid existing token if one is already on disk).
 
-After saving, **stop and tell them to restart Claude Code**:
-> Restart Claude Code now (`/exit` then `claude`) so the new env var
-> loads, then come back and run `/aidan-setup` again. I'll pick up where
-> we left off.
+After sign-in completes, run `/reload-plugins` and **retry
+`mcp__aidan__show_client` once**. If it now succeeds, continue to Step 2
+in the same conversation — do NOT ask the user to restart. If it still
+fails, surface the raw error and stop. Do not re-run sign-in a second
+time under any circumstances.
 
-**B. Returns 200 with no `effective_company_id`** — signed in but no client picked.
+**B. MCP transport failure** — the tool itself errored (server didn't
+respond, shim crashed, `mcp-remote` couldn't start, network unreachable,
+HTML error page returned, JSON parse failure, etc.). This is **not** an
+auth problem. Do **not** trigger sign-in. Instead, surface the raw error
+to the user and stop:
+> The Aidan MCP bridge isn't responding. This isn't an auth problem —
+> signing in again won't help and may make it worse. Here's the raw
+> error: `<error>`. Try `/reload-plugins`; if that doesn't help, fully
+> restart Claude Code (`/exit` then `claude`).
+
+**C. 200 with no `effective_company_id`** — signed in but no client picked.
 > You're signed in. Now let's pick a client to work with.
 
 Skip to Step 2.
 
-**C. Returns 200 with `effective_company_id` set** — fully set up.
+**D. 200 with `effective_company_id` set** — fully set up.
 > You're already signed in to **<client name>**. Skipping ahead to the tour.
 
 Skip to Step 3.
+
+**Loop guard.** If you have already attempted sign-in once in this
+conversation, do NOT attempt it a second time regardless of what
+`show_client` returns. Surface the error and ask the user to investigate
+manually. Re-running sign-in mints a fresh session token and invalidates
+the one the bridge currently holds — that's the loop.
 
 ### Step 2 — pick an active client
 
