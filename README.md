@@ -60,7 +60,7 @@ importing into the workflow UI.
 In Claude Code, run these three commands:
 
 ```
-/plugin marketplace add CallAidan/aidan-claude-plugin
+/plugin marketplace add Call-Aidan/aidan-claude-plugin
 /plugin install aidan-cli@aidan
 /aidan-cli:aidan-setup
 ```
