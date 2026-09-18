@@ -51,9 +51,10 @@ Three things to say before they agree to it:
   Put the personality in `voice`; a Live-1 agent with its script in `backend`
   sounds like it is reading from another room.
 - Voices are its own set of 22, `provider: openai-live`, default `ripple`
-  (Australian male). Background sound, transcriber settings and a separate TTS
-  voice do not apply, and only `function`, `apiRequest`, `endCall`, `dtmf` and
-  `transferCall` tools are accepted.
+  (Australian male). Transcriber settings and a separate TTS voice do not
+  apply; background sound plays only while the agent is speaking. Only
+  `function`, `apiRequest`, `endCall`, `dtmf` and `transferCall` tools are
+  accepted.
 
 ### Create
 
