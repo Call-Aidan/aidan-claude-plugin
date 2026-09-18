@@ -26,6 +26,35 @@ Ask the user (in one message, as a numbered list):
    them edit, OR let them paste their own.
 5. **Tools** — any specific integrations to enable? (skip if unsure)
 
+### Model
+
+Set it yourself rather than asking: `gpt-4.1` for a call agent, `gpt-5.4` for
+a chat one.
+
+Offer **GPT Live-1** if they ask for the agent to sound human, or say the one
+they have sounds robotic. A pipeline voicebot transcribes, thinks, then
+speaks, and the joins are audible; Live-1 hears and speaks directly, so it
+interrupts, hesitates and changes tone the way a person does.
+
+| Model | Character |
+|---|---|
+| `gpt-live-1-terra` | Balanced. The default, and the one to pick unless asked |
+| `gpt-live-1-sol` | Deepest reasoning, slower |
+| `gpt-live-1-luna` | Fastest and cheapest |
+
+Three things to say before they agree to it:
+
+- It costs **2c/min more** than a pipeline minute, on top of their call rate.
+- It takes **two prompts**, sent as `prompt_parts`: `voice` holds everything
+  the agent needs to run the call (role, script, FAQs, objections, tone) and
+  `backend` holds the tools only — which to run, when, and what each needs.
+  Put the personality in `voice`; a Live-1 agent with its script in `backend`
+  sounds like it is reading from another room.
+- Voices are its own set of 22, `provider: openai-live`, default `ripple`
+  (Australian male). Background sound, transcriber settings and a separate TTS
+  voice do not apply, and only `function`, `apiRequest`, `endCall`, `dtmf` and
+  `transferCall` tools are accepted.
+
 ### Create
 
 Once all inputs are confirmed, call `mcp__aidan__create_record` with
