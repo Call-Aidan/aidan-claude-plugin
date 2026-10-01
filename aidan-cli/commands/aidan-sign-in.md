@@ -75,6 +75,37 @@ Content-Type: application/json
 For `<hostname>`, run `hostname` via Bash to get the user's machine name —
 this becomes the session label so they can identify it later when revoking.
 
+Aidan emails a 6-digit sign-in code, so a correct password returns a
+challenge rather than a token:
+
+```json
+{
+  "mfa_required": true,
+  "challenge": "…",
+  "email_hint": "c***@callaidan.com",
+  "expires_in": 600
+}
+```
+
+If the response is 401 / "Invalid credentials", apologize and offer to retry.
+Don't loop more than twice — point them at password reset:
+`https://app.callaidan.com/forgot_password` (or whichever path applies).
+
+### Step 2b — the emailed code
+
+Hold on to `challenge` (never show it to the user), then ask:
+
+> Aidan just emailed a 6-digit sign-in code to `<email_hint>`. What's the code?
+
+Send it with the challenge:
+
+```
+POST https://api.callaidan.com/auth/plugin/login/verify/
+Content-Type: application/json
+
+{"challenge": "<challenge>", "code": "<code>"}
+```
+
 The response will be:
 
 ```json
@@ -86,9 +117,15 @@ The response will be:
 }
 ```
 
-If the response is 401 / "Invalid credentials", apologize and offer to retry.
-Don't loop more than twice — point them at password reset:
-`https://app.callaidan.com/forgot_password` (or whichever path applies).
+- 400 "That code is incorrect." → ask them to check the email and try again.
+- 400 mentioning "expired", or 429 → the challenge is gone. Go back to
+  Step 2 (that emails a fresh code); don't ask for the password again if you
+  still have it in this turn, otherwise ask once more.
+- They didn't get the email → `POST https://api.callaidan.com/auth/plugin/login/resend/`
+  with `{"challenge": "<challenge>"}`, then ask for the new code.
+
+If the login response has `session_token` directly (no `mfa_required`),
+sign-in codes are switched off on that backend — skip to Step 3.
 
 ### Step 3 — persist the session token
 
@@ -149,7 +186,8 @@ last resort.
 - **Never echo or re-display the password.** Once you've sent it to the
   login endpoint, it's gone. Don't write it to any file.
 - **Never echo the full session token.** Always redact to last 4 chars.
-- **Never send credentials anywhere except** `https://api.callaidan.com/auth/plugin/login/`.
+- **Never send credentials anywhere except** `https://api.callaidan.com/auth/plugin/login/`
+  (and the code only to `/auth/plugin/login/verify/`).
 - **Never commit anything.** If the user's shell rc is in a tracked
   dotfiles repo, point that out and let them commit manually.
 - If the login keeps failing, suggest password reset rather than retrying
