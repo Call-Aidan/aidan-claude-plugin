@@ -48,48 +48,43 @@ importing into the workflow UI.
 ## Requirements
 
 - [Claude Code](https://docs.claude.com/en/docs/claude-code) v2.x or later
-- [Node.js](https://nodejs.org) v18 or later (the plugin uses a small
-  Node shim to bridge to the hosted MCP — `npx` ships with Node)
-- An [Aidan](https://callaidan.com) account (agency or company)
-- macOS, Linux, or Windows (WSL)
+- An [Aidan](https://callaidan.com) account (agency or company), and
+  access to its email inbox for the sign-in code.
+
+No Node.js, API key or token file needed.
 
 ---
 
 ## Install (under 2 minutes)
 
-In Claude Code, run these three commands:
+In Claude Code, run:
 
 ```
 /plugin marketplace add Call-Aidan/aidan-claude-plugin
 /plugin install aidan-cli@aidan
-/aidan-cli:aidan-setup
 ```
 
-The first run downloads `mcp-remote` via `npx` (~5 seconds) and walks
-you through:
+Then sign in:
 
-1. **Sign in** — paste your Aidan email and password (sent once to the
-   login endpoint, never stored locally)
-2. **Pick a client** — if you're an agency operator, choose which
-   client to start in
-3. **Quick tour** — 30 seconds on the most useful commands
+1. Run `/mcp`
+2. Choose **plugin:aidan-cli:aidan** and select **Authenticate**
+3. Sign in on the Aidan page that opens in your browser, enter the
+   6-digit code we email you, then come back
 
-That's it. The plugin saves a session token to `~/.aidan/credentials.json`
-and you're done. **No Claude Code restart needed.**
+Finish with `/aidan-cli:aidan-setup` to pick a client and take a
+30-second tour.
 
-> Your password is sent **once** to the Aidan login endpoint and never
-> stored locally. What gets saved is a long-lived but revocable session
-> token — revoke it anytime from **Aidan → Settings → Active Sessions**
-> or by running `/aidan-cli:aidan-sign-out`.
+> Your password and code go to Aidan in your browser, never into the
+> terminal. Claude Code keeps a token that renews itself and lasts up to
+> 180 days. Disconnect any time with `/aidan-cli:aidan-sign-out`, or
+> change your Aidan password to disconnect every device.
 
-### Already installed and just need to sign in?
+### Updating from 0.1.x
 
-```
-/aidan-cli:aidan-sign-in
-/reload-plugins
-```
-
-The reload picks up the new token without needing a Claude Code restart.
+Version 0.2 replaces the old terminal sign-in. After updating, run `/mcp`
+→ **plugin:aidan-cli:aidan** → **Authenticate** once. You can delete
+`~/.aidan/credentials.json` and any `AIDAN_TOKEN` line in your shell
+profile; nothing reads them any more.
 
 ---
 
@@ -103,11 +98,12 @@ with Claude Code built-ins or other plugins.
 | Command | What it does |
 |---|---|
 | `/aidan-cli:aidan-setup` | First-run guided setup — sign in, pick a client, quick tour |
-| `/aidan-cli:aidan-sign-in` | Sign in with email + password |
-| `/aidan-cli:aidan-sign-out` | Revoke the current session token |
+| `/aidan-cli:aidan-sign-in` | Check you're signed in, and how to sign in if not |
+| `/aidan-cli:aidan-sign-out` | Sign out of this Claude Code |
 | `/aidan-cli:aidan-whoami` | Show current context — active client, agency, auth source |
 | `/aidan-cli:aidan-clients` | List every client your account can access |
 | `/aidan-cli:aidan-use-client <name>` | Switch the active client |
+| `/aidan-cli:aidan-new-client [name]` | Add a client — blank, or with the agents and workflows of one you've built |
 
 **Agents**
 
@@ -120,6 +116,7 @@ with Claude Code built-ins or other plugins.
 | `/aidan-cli:aidan-attach-tool <agent-id>` | Attach tools from the platform library |
 | `/aidan-cli:aidan-clone-agent <id>` | Pull an agent's config to local files for editing |
 | `/aidan-cli:aidan-push-agent` | Push local edits back to Aidan |
+| `/aidan-cli:aidan-prompt-history <agent>` | Prompt versions, compare, roll back |
 
 **Workflows + campaigns**
 
@@ -149,6 +146,7 @@ with Claude Code built-ins or other plugins.
 |---|---|
 | `/aidan-cli:aidan-senders` | List email senders |
 | `/aidan-cli:aidan-phones` | List phone numbers |
+| `/aidan-cli:aidan-import-contacts <file.csv> [tags]` | Import contacts from a local CSV |
 
 ---
 
@@ -175,9 +173,19 @@ time:
 /aidan-cli:aidan-use-client acme
 ```
 
-The selection persists across Claude Code restarts and is keyed to your
-session token (so two teammates in the same agency don't step on each
-other's active client).
+The selection persists across Claude Code restarts and is kept per
+sign-in, so two teammates in the same agency don't step on each other's
+active client.
+
+Agency admins can also manage clients themselves from here: add one with
+`/aidan-cli:aidan-new-client` (blank, or with the agents and workflows of
+a client you've already built), change a client's limits or plan, and manage client plans
+and white-label settings. Just ask.
+
+### Using Codex instead?
+
+The same Aidan server works in OpenAI Codex. See
+[Connect to Codex](https://docs.callaidan.com/codex-connector).
 
 ### Recommended workflow
 
@@ -223,19 +231,15 @@ enough to warrant it.
 
 ## Troubleshooting
 
-### "You're not signed in" after `/aidan-cli:aidan-sign-in`
+### Aidan tools are missing, or calls say "needs authentication"
 
-Run `/reload-plugins`. The plugin needs to re-spawn its MCP shim to
-pick up the new token from `~/.aidan/credentials.json`.
+You're signed out. Run `/mcp`, choose **plugin:aidan-cli:aidan** and
+select **Authenticate**.
 
-If that doesn't fix it, check the file is there and readable:
-
-```bash
-cat ~/.aidan/credentials.json
-```
-
-You should see a JSON object with a `token` field starting with
-`adn_pls_`.
+If sign-in keeps failing, choose **Clear authentication** in the same
+menu, then **Authenticate** again. No code in your inbox? Check spam, or
+use **Send a new code** on the sign-in page. Changing your Aidan password
+signs you out too.
 
 ### "Plugin not found in any marketplace" on install
 
@@ -247,43 +251,33 @@ Make sure you're using the qualified install syntax:
 
 Not just `/plugin install aidan-cli`.
 
-### MCP shows ✘ failed in `/mcp`
-
-Two common causes:
-
-- **Node.js isn't installed.** Run `node --version` in your terminal.
-  If it errors, install Node 18+ from [nodejs.org](https://nodejs.org).
-- **First-run download is still in progress.** The shim downloads
-  `mcp-remote` via `npx` on the first launch; give it ~10 seconds and
-  try `/reload-plugins`.
-
 ### Slash commands aren't appearing
 
 Run `/reload-plugins` once, then type `/aidan-cli:` and you should see
 the full list in the autocomplete picker.
 
-### "Token is invalid" or 401 errors
+---
 
-Your session was revoked or expired (180-day max lifetime). Run
-`/aidan-cli:aidan-sign-in` again to issue a fresh one.
+## Before anything risky
+
+Deleting things, releasing or buying numbers, bulk SMS/email, queueing AI
+calls to a list, launching email campaigns, enrolling more than 5 contacts
+and changing a client's billing don't run straight away. Aidan sends back
+a summary, Claude asks you, and it only runs after you say yes.
 
 ---
 
 ## Privacy and security
 
-- Your password is sent **once** to Aidan during `/aidan-cli:aidan-sign-in`
-  and never stored locally.
-- The session token is stored in `~/.aidan/credentials.json` (mode 600,
-  readable only by you) and optionally in `AIDAN_TOKEN` in your shell
-  profile as a backup.
-- Tokens can be revoked anytime from **Aidan → Settings → Active
-  Sessions** or via `/aidan-cli:aidan-sign-out`.
-- The hosted MCP exchanges your session token for a short-lived JWT on
-  every call, so a leaked token can be cut off immediately by
-  revocation — no waiting for a long-lived JWT to expire.
-- Active-client selection is stored server-side and keyed to your
-  session token, so teammates sharing an agency don't step on each
-  other's context.
+- You sign in on an Aidan page in your browser, with your password and a
+  code emailed to you. Neither goes through Claude Code.
+- Claude Code holds a token, not your login. It's replaced every hour and
+  lasts up to 180 days.
+- Claude can do what your Aidan login can do, and no more.
+- Disconnect any time with `/aidan-cli:aidan-sign-out`, or by changing
+  your password (which disconnects every device).
+- Active-client selection is stored server-side per sign-in, so teammates
+  sharing an agency don't step on each other's context.
 - All traffic goes over HTTPS to the Aidan MCP endpoint. No
   third-party telemetry.
 
@@ -304,12 +298,9 @@ Your session was revoked or expired (180-day max lifetime). Run
 ├── .claude-plugin/marketplace.json    ← Claude Code marketplace manifest
 ├── aidan-cli/                         ← the plugin
 │   ├── .claude-plugin/plugin.json
-│   ├── CLAUDE.md                       ← operating instructions for Claude
 │   ├── commands/                       ← slash commands
-│   ├── skills/                         ← auto-trigger skills
-│   ├── agents/                         ← sub-agents
-│   └── helpers/
-│       └── mcp-shim.js                 ← stdio MCP bridge (reads token from ~/.aidan/credentials.json)
+│   ├── skills/                         ← auto-trigger skills (aidan-platform holds the operating instructions)
+│   └── agents/                         ← sub-agents
 └── README.md
 ```
 

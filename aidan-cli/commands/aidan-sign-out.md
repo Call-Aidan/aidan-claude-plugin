@@ -1,51 +1,13 @@
 ---
-description: Sign out — revoke the current Aidan session token
+description: Sign out of Aidan in this Claude Code
 ---
 
-Revoke the user's current session and remove the token from their shell
-profile.
+Tell the user:
 
-### Step 1 — revoke server-side
+> Run `/mcp`, choose **plugin:aidan-cli:aidan** and select **Clear
+> authentication**. Aidan tools stop working here until you
+> **Authenticate** again (`/aidan-sign-in` shows how).
 
-Call the logout endpoint with the current token. Read the token from
-`~/.aidan/credentials.json` first (primary), then fall back to
-`$AIDAN_TOKEN` env var if the file isn't there.
-
-```
-POST https://api.callaidan.com/auth/plugin/logout/
-Authorization: Bearer <token>
-```
-
-This is idempotent — a 204 response is success regardless of whether the
-token was active. Don't worry if it's already revoked.
-
-### Step 2 — remove from credentials file
-
-```bash
-rm -f ~/.aidan/credentials.json
-```
-
-### Step 3 — remove from shell profile
-
-1. Detect the user's shell rc file (zsh/bash/fish — same logic as
-   `/aidan-sign-in`).
-2. Use `Edit` to remove the `export AIDAN_TOKEN="…"` line (and any
-   accompanying comment line if present).
-3. Confirm:
-
-   > Signed out. The session has been revoked on Aidan and removed from
-   > `~/.aidan/credentials.json` + `<rc-file>`. Run `/aidan-sign-in`
-   > again any time to sign back in.
-
-### Step 4 — note about active session
-
-The MCP server's JWT cache may briefly hold a valid access token (~30s
-remaining at most) for the just-revoked session. Subsequent tool calls
-will fail with 401 within that window. Run `/reload-plugins` to drop the
-MCP connection and force a re-handshake with no credentials.
-
-### Guardrails
-
-- Don't print the old token anywhere.
-- Don't try to delete other env vars that look related (e.g. legacy
-  `AIDAN_API_KEY`) unless the user asks.
+To disconnect every device and app at once, they change their Aidan
+password; every Claude Code and other connected app then has to sign in
+again.

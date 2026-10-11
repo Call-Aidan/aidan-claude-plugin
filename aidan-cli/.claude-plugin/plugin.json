@@ -1,7 +1,7 @@
 {
   "name": "aidan-cli",
   "displayName": "Aidan CLI",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Manage Aidan agents, workflows, contacts, conversations, and analytics directly from Claude Code.",
   "homepage": "https://callaidan.com",
   "author": {
@@ -10,10 +10,8 @@
   },
   "mcpServers": {
     "aidan": {
-      "command": "node",
-      "args": [
-        "${CLAUDE_PLUGIN_ROOT}/helpers/mcp-shim.js"
-      ]
+      "type": "http",
+      "url": "https://api.callaidan.com/mcp"
     },
     "aidan-docs": {
       "type": "http",

@@ -10,9 +10,15 @@
       "name": "aidan-cli",
       "source": "./aidan-cli",
       "description": "Manage Aidan agents, workflows, contacts, conversations, and analytics directly from Claude Code.",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "category": "productivity",
-      "keywords": ["aidan", "ai-agents", "workflow", "voice-ai", "crm"]
+      "keywords": [
+        "aidan",
+        "ai-agents",
+        "workflow",
+        "voice-ai",
+        "crm"
+      ]
     }
   ]
 }

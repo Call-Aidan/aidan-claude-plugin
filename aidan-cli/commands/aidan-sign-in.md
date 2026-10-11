@@ -1,194 +1,43 @@
 ---
-description: Sign in to Aidan with your email and password
+description: Sign in to Aidan in your browser
 ---
 
-You're guiding the user through a one-time login so the Aidan MCP
-connection works.
+The plugin signs in through the browser. You can't open the sign-in page
+yourself, and you must never ask for or handle the user's password or
+sign-in code. Your job is to check whether they're signed in and, if not,
+tell them the two clicks that do it.
 
-### Step 0 — reuse existing session if possible (idempotency check)
+### Step 1 — check
 
-**Before asking for any credentials**, check whether a usable session
-already exists on disk. Minting a new token unnecessarily will invalidate
-the one the running MCP bridge currently holds and put the user into a
-re-auth loop.
+Call `mcp__aidan__show_client`.
 
-1. Read `~/.aidan/credentials.json`. If it doesn't exist, skip to Step 1.
-2. Parse the JSON. Pull `token` and `expires_at`.
-3. If `expires_at` is in the future, validate the token by calling:
-   ```
-   POST https://api.callaidan.com/mcp
-   Authorization: Bearer <token>
-   Content-Type: application/json
-   Accept: application/json, text/event-stream
+- **It returns 200** — they're already signed in. Say so in one line, with
+  the active client if there is one, and stop.
+- **The tool doesn't exist, or the call fails with 401 / "needs
+  authentication"** — go to Step 2.
+- **Any other error** (network, timeout, 5xx) — show the raw error and stop.
+  It isn't a sign-in problem.
 
-   {"jsonrpc":"2.0","id":"check","method":"initialize","params":{
-     "protocolVersion":"2024-11-05",
-     "capabilities":{},
-     "clientInfo":{"name":"aidan-cli-signin-check","version":"1"}
-   }}
-   ```
-   A `200` response with a JSON-RPC `result` (no `error` block) means the
-   token is valid.
-4. If valid, **stop and report success without minting anything**:
-   > You're already signed in as `<email>` (token in
-   > `~/.aidan/credentials.json` is valid). No new session needed.
-   >
-   > If you wanted to force a fresh sign-in (e.g. to switch accounts),
-   > run `/aidan-sign-out` first, then `/aidan-sign-in` again.
-   Then exit. Do NOT proceed to Step 1.
-5. Only if the file is missing, the token is expired, or the validation
-   call returns an explicit auth error, continue to Step 1.
+### Step 2 — tell them how
 
-If the validation call fails for a non-auth reason (network, 5xx, HTML
-error page), do NOT proceed to mint a new token — the new one won't fix
-a transport problem. Surface the raw error and stop.
-
-### Step 1 — collect credentials
-
-Ask the user (in two separate messages):
-
-1. First message:
-   > What's the email you use to sign in to Aidan?
-
-2. After they answer, ask:
-   > And your password? (Just paste it — I'll send it directly to Aidan
-   > to swap for a session token, then forget it.)
-
-Important: do NOT echo the password back. Do NOT include it in any
-follow-up message. Treat it as write-only input.
-
-### Step 2 — exchange for a session token
-
-Call the login endpoint:
-
-```
-POST https://api.callaidan.com/auth/plugin/login/
-Content-Type: application/json
-
-{
-  "email": "<email>",
-  "password": "<password>",
-  "label": "Aidan CLI on <hostname>"
-}
-```
-
-For `<hostname>`, run `hostname` via Bash to get the user's machine name —
-this becomes the session label so they can identify it later when revoking.
-
-Aidan emails a 6-digit sign-in code, so a correct password returns a
-challenge rather than a token:
-
-```json
-{
-  "mfa_required": true,
-  "challenge": "…",
-  "email_hint": "c***@callaidan.com",
-  "expires_in": 600
-}
-```
-
-If the response is 401 / "Invalid credentials", apologize and offer to retry.
-Don't loop more than twice — point them at password reset:
-`https://app.callaidan.com/forgot_password` (or whichever path applies).
-
-### Step 2b — the emailed code
-
-Hold on to `challenge` (never show it to the user), then ask:
-
-> Aidan just emailed a 6-digit sign-in code to `<email_hint>`. What's the code?
-
-Send it with the challenge:
-
-```
-POST https://api.callaidan.com/auth/plugin/login/verify/
-Content-Type: application/json
-
-{"challenge": "<challenge>", "code": "<code>"}
-```
-
-The response will be:
-
-```json
-{
-  "session_token": "adn_pls_…",
-  "session_id": "<uuid>",
-  "label": "Aidan CLI on macbook-pro",
-  "expires_at": "2026-10-24T…"
-}
-```
-
-- 400 "That code is incorrect." → ask them to check the email and try again.
-- 400 mentioning "expired", or 429 → the challenge is gone. Go back to
-  Step 2 (that emails a fresh code); don't ask for the password again if you
-  still have it in this turn, otherwise ask once more.
-- They didn't get the email → `POST https://api.callaidan.com/auth/plugin/login/resend/`
-  with `{"challenge": "<challenge>"}`, then ask for the new code.
-
-If the login response has `session_token` directly (no `mfa_required`),
-sign-in codes are switched off on that backend — skip to Step 3.
-
-### Step 3 — persist the session token
-
-Save the raw `session_token` (no `Bearer ` prefix — the plugin's MCP
-helper adds that itself) to **two** places. The credentials file is the
-primary path the plugin reads on every MCP connection; the shell rc is a
-backup so command-line tools can also use the same env var.
-
-#### 3a — Credentials file (primary, no restart needed)
-
-Use Bash:
-
-```bash
-mkdir -p ~/.aidan && \
-  printf '{\n  "token": "<SESSION_TOKEN>",\n  "email": "<EMAIL>",\n  "expires_at": "<EXPIRES_AT>"\n}\n' \
-  > ~/.aidan/credentials.json && \
-  chmod 600 ~/.aidan/credentials.json
-```
-
-Substitute `<SESSION_TOKEN>`, `<EMAIL>`, and `<EXPIRES_AT>` from the
-login response. The `chmod 600` keeps the token readable only by the
-user.
-
-#### 3b — Shell rc (secondary, picked up on next Claude Code launch)
-
-1. Detect the user's shell from `$SHELL`. Pick the matching rc file:
-   - zsh → `~/.zshrc`
-   - bash → `~/.bashrc` (macOS: `~/.bash_profile` if it exists)
-   - fish → `~/.config/fish/config.fish`
-2. Check whether `AIDAN_TOKEN` is already exported in that file.
-   - If yes: replace the existing line via `Edit`.
-   - If no: append `export AIDAN_TOKEN="<session_token>"` via Bash with
-     `>>`. The value should look like `adn_pls_…` with no other prefix.
-3. Show the user the line you wrote, **but redact all but the last 4
-   characters of the token** (e.g.
-   `export AIDAN_TOKEN="adn_pls_…AbCd"`).
-
-#### 3c — Confirm
-
-> Signed in as `<email>`. Token saved to `~/.aidan/credentials.json` and
-> `<rc-file>`. Run `/reload-plugins` to pick up the new session — no full
-> restart needed.
+> To sign in:
+> 1. Run `/mcp`
+> 2. Choose **plugin:aidan-cli:aidan** and select **Authenticate**
 >
-> You can revoke this session anytime from Aidan → Settings → Active
-> Sessions, or by running `/aidan-sign-out` in Claude Code.
+> Your browser opens an Aidan sign-in page. Sign in with your Aidan email
+> and password there, then enter the 6-digit code we email you, and come
+> back here. Your password and code go to Aidan, never into this terminal.
+>
+> No email? Check spam, or use **Send a new code** on that page.
 
-### Step 4 — offer to verify
-
-> Want me to test the connection?
-
-If they say yes, run `/reload-plugins`, then `mcp__aidan__show_client`.
-If `show_client` returns 401 even after `/reload-plugins`, the helper
-isn't being invoked — tell the user to fully restart Claude Code as a
-last resort.
+When they say they're done, call `mcp__aidan__show_client` again and
+confirm in one line. If there's no active client and they have several,
+point them at `/aidan-use-client <name>`.
 
 ### Guardrails
 
-- **Never echo or re-display the password.** Once you've sent it to the
-  login endpoint, it's gone. Don't write it to any file.
-- **Never echo the full session token.** Always redact to last 4 chars.
-- **Never send credentials anywhere except** `https://api.callaidan.com/auth/plugin/login/`
-  (and the code only to `/auth/plugin/login/verify/`).
-- **Never commit anything.** If the user's shell rc is in a tracked
-  dotfiles repo, point that out and let them commit manually.
-- If the login keeps failing, suggest password reset rather than retrying
-  endlessly.
+- Never ask for, accept, or send an email, password or sign-in code, and
+  never POST to any login endpoint. If the user pastes a password or code
+  anyway, tell them not to and that it wasn't used.
+- If Authenticate keeps failing, suggest: `/mcp` → **aidan** → **Clear
+  authentication**, then **Authenticate** again.
